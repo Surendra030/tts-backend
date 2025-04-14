@@ -9,15 +9,16 @@ import asyncio
 
 app = FastAPI()
 
-# Enable CORS to allow communication with frontend
+# CORS setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # You can replace with your frontend domain
+    allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
-# Async TTS function
+# Async TTS generation
 async def generate_tts_async(clean_text: str):
     communicate = edge_tts.Communicate(clean_text, "en-US-AriaNeural")
     stream = io.BytesIO()
@@ -29,7 +30,8 @@ async def generate_tts_async(clean_text: str):
     audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
     return audio_base64
 
-@app.post("/tts")
+# POST /tts endpoint
+@app.post("/")
 async def tts(request: Request):
     try:
         data_list = await request.json()
@@ -38,7 +40,7 @@ async def tts(request: Request):
 
         clean_items = []
         tasks = []
-        
+
         for item in data_list:
             text_id = item.get('id')
             raw_text = item.get('text', '').strip()
@@ -47,7 +49,7 @@ async def tts(request: Request):
             width = item.get('width')
             height = item.get('height')
 
-            # Clean the text
+            # Clean text
             clean_text = re.sub(r"[^\w\s.,?!'-]", '', raw_text)
             clean_text = re.sub(r'\s+', ' ', clean_text).strip()
             clean_text = clean_text.replace(".", " ")
@@ -55,8 +57,6 @@ async def tts(request: Request):
                 print(f"❌ Skipping ID {text_id}: Empty/Invalid after cleaning.")
                 continue
 
-
-            # Save item and corresponding task
             clean_items.append({
                 "id": text_id,
                 "x": x,
@@ -66,10 +66,8 @@ async def tts(request: Request):
             })
             tasks.append(generate_tts_async(clean_text))
 
-        # Run all TTS tasks concurrently
         audio_results = await asyncio.gather(*tasks)
 
-        # Build response
         response_data = []
         for i in range(len(audio_results)):
             response_data.append({
@@ -91,3 +89,7 @@ async def tts(request: Request):
             status_code=500,
             content={"error": f"Server error: {str(e)}"}
         )
+
+# 👇 Vercel looks for this object as the entry point
+# Export `app` object as `handler` for Vercel
+handler = app
