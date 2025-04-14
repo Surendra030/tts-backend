@@ -21,6 +21,13 @@ async def generate_tts_async(clean_text: str):
     audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
     return audio_base64
 
+# ✅ Root route (for Vercel test or health check)
+@app.route("/",methods=["GET"])
+async def root():
+    return {"message": "🎉 FastAPI TTS server is running on Vercel!"}
+
+
+
 @app.route("/tts", methods=["POST"])
 def tts():
     try:
