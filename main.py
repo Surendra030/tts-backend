@@ -96,6 +96,5 @@ async def tts(request: Request):
             content={"error": f"Server error: {str(e)}"}
         )
 
-# 👇 Vercel looks for this object as the entry point
-# Export `app` object as `handler` for Vercel
-handler = app
+if __name__ == '__main__':
+    app.run(debug=True)
