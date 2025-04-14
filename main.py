@@ -18,6 +18,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ✅ Root route (for Vercel test or health check)
+@app.get("/")
+async def root():
+    return {"message": "🎉 FastAPI TTS server is running on Vercel!"}
+
+
 # Async TTS generation
 async def generate_tts_async(clean_text: str):
     communicate = edge_tts.Communicate(clean_text, "en-US-AriaNeural")
