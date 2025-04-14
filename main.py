@@ -1,30 +1,15 @@
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import edge_tts
+import asyncio
 import io
 import base64
 import re
-import asyncio
 
-app = FastAPI()
+app = Flask(__name__)
+CORS(app)
 
-# CORS setup
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # You can replace with your frontend domain
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ✅ Root route (for Vercel test or health check)
-@app.get("/")
-async def root():
-    return {"message": "🎉 FastAPI TTS server is running on Vercel!"}
-
-
-# Async TTS generation
+# Async TTS function
 async def generate_tts_async(clean_text: str):
     communicate = edge_tts.Communicate(clean_text, "en-US-AriaNeural")
     stream = io.BytesIO()
@@ -36,11 +21,10 @@ async def generate_tts_async(clean_text: str):
     audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
     return audio_base64
 
-# POST /tts endpoint
-@app.post("/")
-async def tts(request: Request):
+@app.route("/tts", methods=["POST"])
+def tts():
     try:
-        data_list = await request.json()
+        data_list = request.get_json()
         print(f"\n{'='*60}")
         print(f"📥 Received {len(data_list)} items for TTS processing.")
 
@@ -55,7 +39,7 @@ async def tts(request: Request):
             width = item.get('width')
             height = item.get('height')
 
-            # Clean text
+            # Clean the text
             clean_text = re.sub(r"[^\w\s.,?!'-]", '', raw_text)
             clean_text = re.sub(r'\s+', ' ', clean_text).strip()
             clean_text = clean_text.replace(".", " ")
@@ -72,8 +56,12 @@ async def tts(request: Request):
             })
             tasks.append(generate_tts_async(clean_text))
 
-        audio_results = await asyncio.gather(*tasks)
+        # Run all TTS tasks concurrently
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        audio_results = loop.run_until_complete(asyncio.gather(*tasks))
 
+        # Build response
         response_data = []
         for i in range(len(audio_results)):
             response_data.append({
@@ -87,14 +75,11 @@ async def tts(request: Request):
 
         print(f"📤 Sending TTS response with {len(response_data)} audio items.")
         print(f"{'='*60}\n")
-        return JSONResponse(content=response_data)
+        return jsonify(response_data)
 
     except Exception as e:
         print(f"🔥 Error: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Server error: {str(e)}"}
-        )
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
